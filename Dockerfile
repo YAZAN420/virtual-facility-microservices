@@ -1,0 +1,15 @@
+FROM node:22-alpine
+
+ARG APP_NAME
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN npm install --verbose
+
+COPY . .
+
+RUN npm run build -- ${APP_NAME}
+
+CMD ["node","dist/apps/${APP_NAME}/main.js"]

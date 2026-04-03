@@ -1,0 +1,188 @@
+services:
+  workflows-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=workflows-service
+    command: npm run start:dev -- workflows-service
+    ports:
+      - 3001:3001
+    environment:
+      - MONGODB_URI=mongodb://admin:password123@workflows-mongodb:27017/workflows?authSource=admin
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+      - NATS_URL=nats://nats:4222
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      workflows-mongodb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  workflows-mongodb:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=workflows
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  virtual-facility:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=virtual-facility
+    command: npm run start:dev -- virtual-facility
+    ports:
+      - 3000:3000
+    environment:
+      - MONGODB_URI=mongodb://admin:password123@virtual-facility-mongodb:27017/virtual_facility?authSource=admin
+      - WORKFLOWS_SERVICE_URL=http://workflows-service:3001
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+      - NATS_URL=nats://nats:4222
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      virtual-facility-mongodb:
+        condition: service_healthy
+      workflows-service:
+        condition: service_started
+      nats:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  virtual-facility-mongodb:
+    image: mongo:latest
+    ports:
+      - 27018:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=virtual_facility
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.2.2-alpine
+    ports:
+      - '4222:4222'
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 4222 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alarms-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=alarms-service
+    command: npm run start:dev -- alarms-service
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      nats:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  alarms-generator:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=alarms-generator
+    command: npm run start:dev -- alarms-generator
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  notifications-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=notifications-service
+    command: npm run start:dev -- notifications-service
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      nats:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  alarms-classifier-service:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - APP_NAME=alarms-classifier-service
+    command: npm run start:dev -- alarms-classifier-service
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_running']
+      interval: 10s
+      timeout: 5s
+      retries: 5
